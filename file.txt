@@ -1,0 +1,184 @@
+//@version=6
+indicator("BOS + EMA + Session Dashboard", overlay=true)
+
+//=====================
+// BOS SETTINGS
+//=====================
+swingLen = input.int(5, "Swing Length", minval=2)
+
+//=====================
+// EMA SETTINGS
+//=====================
+emaLength = input.int(200, "EMA Length")
+
+//=====================
+//=====================
+// SESSION (IST)
+//=====================
+
+istHour = hour(time, "Asia/Kolkata")
+istMinute = minute(time, "Asia/Kolkata")
+
+currentMinutes = istHour * 60 + istMinute
+
+asiaActive =
+     currentMinutes >= (5 * 60 + 30) and
+     currentMinutes < (14 * 60 + 30)
+
+londonActive =
+     currentMinutes >= (13 * 60 + 30) and
+     currentMinutes < (22 * 60 + 30)
+
+nyActive =
+     currentMinutes >= (18 * 60 + 30) or
+     currentMinutes < (3 * 60 + 30)
+
+currentSession =
+     londonActive and nyActive ? "LONDON+NY" :
+     nyActive ? "NEW YORK" :
+     londonActive ? "LONDON" :
+     asiaActive ? "ASIA" :
+     "OFF"
+
+sessionColor =
+     londonActive and nyActive ? color.purple :
+     nyActive ? color.red :
+     londonActive ? color.green :
+     asiaActive ? color.blue :
+     color.gray
+//=====================
+// BOS FUNCTION
+//=====================
+getBosTrend() =>
+    ph = ta.pivothigh(high, swingLen, swingLen)
+    pl = ta.pivotlow(low, swingLen, swingLen)
+
+    var float lastHigh = na
+    var float lastLow = na
+    var int trend = 0
+
+    if not na(ph)
+        lastHigh := ph
+
+    if not na(pl)
+        lastLow := pl
+
+    if not na(lastHigh) and close > lastHigh
+        trend := 1
+
+    if not na(lastLow) and close < lastLow
+        trend := -1
+
+    trend
+
+//=====================
+// EMA FUNCTION
+//=====================
+getEMATrend() =>
+    ema = ta.ema(close, emaLength)
+    close > ema ? 1 : -1
+
+//=====================
+// BOS DATA
+//=====================
+bos1H = request.security(syminfo.tickerid, "60", getBosTrend())
+bos4H = request.security(syminfo.tickerid, "240", getBosTrend())
+bos1D = request.security(syminfo.tickerid, "D", getBosTrend())
+
+//=====================
+// EMA DATA
+//=====================
+ema1H = request.security(syminfo.tickerid, "60", getEMATrend())
+ema4H = request.security(syminfo.tickerid, "240", getEMATrend())
+ema1D = request.security(syminfo.tickerid, "D", getEMATrend())
+
+//=====================
+// HELPERS
+//=====================
+trendText(v) =>
+    string result = "NEUTRAL"
+
+    if v == 1
+        result := "BULLISH"
+    else if v == -1
+        result := "BEARISH"
+
+    result
+trendColor(v) =>
+    if v == 1
+        color.green
+    else if v == -1
+        color.red
+    else
+        color.orange
+
+//=====================
+// BOS BIAS
+//=====================
+bosBias =
+     bos1H == 1 and bos4H == 1 ? "LONG ONLY" :
+     bos1H == -1 and bos4H == -1 ? "SHORT ONLY" :
+     "NO TRADE"
+
+bosBiasColor =
+     bosBias == "LONG ONLY" ? color.green :
+     bosBias == "SHORT ONLY" ? color.red :
+     color.orange
+
+//=====================
+// EMA BIAS
+//=====================
+emaBias =
+     ema1H == 1 and ema4H == 1 ? "LONG ONLY" :
+     ema1H == -1 and ema4H == -1 ? "SHORT ONLY" :
+     "NO TRADE"
+
+emaBiasColor =
+     emaBias == "LONG ONLY" ? color.green :
+     emaBias == "SHORT ONLY" ? color.red :
+     color.orange
+
+//=====================
+// BOS TABLE
+//=====================
+var table bosTable = table.new(position.bottom_left, 2, 5, border_width=1)
+
+if barstate.islast
+    table.cell(bosTable, 0, 0, "TF", bgcolor=color.gray, text_color=color.white)
+    table.cell(bosTable, 1, 0, "TREND", bgcolor=color.gray, text_color=color.white)
+
+    table.cell(bosTable, 0, 1, "1H")
+    table.cell(bosTable, 1, 1, trendText(bos1H), bgcolor=trendColor(bos1H), text_color=color.white)
+
+    table.cell(bosTable, 0, 2, "4H")
+    table.cell(bosTable, 1, 2, trendText(bos4H), bgcolor=trendColor(bos4H), text_color=color.white)
+
+    table.cell(bosTable, 0, 3, "1D")
+    table.cell(bosTable, 1, 3, trendText(bos1D), bgcolor=trendColor(bos1D), text_color=color.white)
+
+    table.cell(bosTable, 0, 4, "BIAS")
+    table.cell(bosTable, 1, 4, bosBias, bgcolor=bosBiasColor, text_color=color.white)
+
+//=====================
+// EMA TABLE
+//=====================
+var table emaTable = table.new(position.top_left, 2, 6)
+
+if barstate.islast
+    table.cell(emaTable, 0, 0, "EMA TF", bgcolor=color.gray, text_color=color.white)
+    table.cell(emaTable, 1, 0, "TREND", bgcolor=color.gray, text_color=color.white)
+
+    table.cell(emaTable, 0, 1, "1H")
+    table.cell(emaTable, 1, 1, trendText(ema1H), bgcolor=trendColor(ema1H), text_color=color.white)
+
+    table.cell(emaTable, 0, 2, "4H")
+    table.cell(emaTable, 1, 2, trendText(ema4H), bgcolor=trendColor(ema4H), text_color=color.white)
+
+    table.cell(emaTable, 0, 3, "1D")
+    table.cell(emaTable, 1, 3, trendText(ema1D), bgcolor=trendColor(ema1D), text_color=color.white)
+
+    table.cell(emaTable, 0, 4, "BIAS")
+    table.cell(emaTable, 1, 4, emaBias, bgcolor=emaBiasColor, text_color=color.white)
+
+    table.cell(emaTable, 0, 5, "SESSION")
+    table.cell(emaTable, 1, 5, currentSession, bgcolor=sessionColor, text_color=color.white)s

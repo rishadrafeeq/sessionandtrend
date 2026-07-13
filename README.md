@@ -1,1 +1,1 @@
-# sessionandtrend
+add the copy paste the file to pinsecript tradingview
